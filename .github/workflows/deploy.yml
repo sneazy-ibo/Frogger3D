@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write
-  checks: write
 
 concurrency:
   group: "pages"
@@ -56,17 +55,11 @@ jobs:
           publish_dir: ./dist
           keep_files: true
 
-      - name: Create commit check link
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Job summary
         run: |
           SHA=${{ steps.version.outputs.sha }}
+          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/versions/$SHA/"
 
-          gh api \
-            repos/${{ github.repository }}/check-runs \
-            -X POST \
-            -f name="Frogger3D Preview" \
-            -f head_sha=${{ github.sha }} \
-            -f status="completed" \
-            -f conclusion="success" \
-            -f details_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/versions/$SHA/"
+          echo "### 🐸 Frogger3D Preview" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "[$URL]($URL)" >> "$GITHUB_STEP_SUMMARY"

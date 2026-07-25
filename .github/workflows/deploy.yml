@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
   checks: write
 
 concurrency:
@@ -46,21 +44,17 @@ jobs:
           SHA=$(git rev-parse --short HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare Pages content
+      - name: Copy build into version folder
         run: |
-          mkdir -p pages/versions/${{ steps.version.outputs.sha }}
+          mkdir -p dist/versions/${{ steps.version.outputs.sha }}
+          cp -r dist/assets dist/index.html dist/versions/${{ steps.version.outputs.sha }}/
 
-          cp -r dist/* pages/
-
-          cp -r dist/* pages/versions/${{ steps.version.outputs.sha }}/
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: pages
-
-      - name: Deploy GitHub Pages
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          keep_files: true
 
       - name: Create commit check link
         env:

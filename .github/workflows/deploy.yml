@@ -1,0 +1,78 @@
+name: Deploy Frogger3D
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  checks: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Create version
+        id: version
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p pages/versions/${{ steps.version.outputs.sha }}
+
+          cp -r dist/* pages/
+
+          cp -r dist/* pages/versions/${{ steps.version.outputs.sha }}/
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - name: Deploy GitHub Pages
+        uses: actions/deploy-pages@v4
+
+      - name: Create commit check link
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHA=${{ steps.version.outputs.sha }}
+
+          gh api \
+            repos/${{ github.repository }}/check-runs \
+            -X POST \
+            -f name="Frogger3D Preview" \
+            -f head_sha=${{ github.sha }} \
+            -f status="completed" \
+            -f conclusion="success" \
+            -f details_url="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/versions/$SHA/"

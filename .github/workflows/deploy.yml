@@ -15,6 +15,9 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.version.outputs.url }}
 
     steps:
       - name: Checkout
@@ -42,6 +45,7 @@ jobs:
         run: |
           SHA=$(git rev-parse --short HEAD)
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/versions/$SHA/" >> "$GITHUB_OUTPUT"
 
       - name: Copy build into version folder
         run: |
@@ -57,9 +61,6 @@ jobs:
 
       - name: Job summary
         run: |
-          SHA=${{ steps.version.outputs.sha }}
-          URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/versions/$SHA/"
-
           echo "### 🐸 Frogger3D Preview" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "[$URL]($URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[${{ steps.version.outputs.url }}](${{ steps.version.outputs.url }})" >> "$GITHUB_STEP_SUMMARY"

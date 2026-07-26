@@ -75,6 +75,10 @@ const modelMatrix = mat4.create()
 // Current camera mode, switchable with the "C" key
 let currentCameraMode = CameraMode.ANGLED_TOP_DOWN
 
+let isPaused = false
+let animationTimeMs = 0
+let lastFrameTimeMs = null
+
 const cameraTarget = [0, 0, 0]
 const fieldOfViewDegrees = 60
 
@@ -83,13 +87,19 @@ initMouseCameraControls(canvas, cameraState)
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLocaleLowerCase()
 
-  if (key === 'c') {
-    currentCameraMode =
-      currentCameraMode === CameraMode.ANGLED_TOP_DOWN
-        ? CameraMode.CHASE
-        : CameraMode.ANGLED_TOP_DOWN
+  switch (key) {
+    case 'c':
+      currentCameraMode =
+        currentCameraMode === CameraMode.ANGLED_TOP_DOWN
+          ? CameraMode.CHASE
+          : CameraMode.ANGLED_TOP_DOWN
 
-    resetCameraTilt(currentCameraMode)
+      resetCameraTilt(currentCameraMode)
+      break
+
+    case 'p':
+      isPaused = !isPaused
+      break
   }
 })
 
@@ -105,7 +115,14 @@ function updateProjectionMatrix() {
 }
 
 function render(timeMs) {
-  const timeSeconds = timeMs * 0.001
+  const deltaMs = lastFrameTimeMs === null ? 0 : timeMs - lastFrameTimeMs
+  lastFrameTimeMs = timeMs
+
+  if (!isPaused) {
+    animationTimeMs += deltaMs
+  }
+
+  const timeSeconds = animationTimeMs * 0.001
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 

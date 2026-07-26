@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "format": "pnpm prettier --write ."
+    "format": "pnpm prettier --write .",
+    "prepare": "husky"
   },
   "lint-staged": {
     "*.{js,json,css,html,yml}": [

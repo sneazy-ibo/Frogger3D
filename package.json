@@ -11,7 +11,7 @@
     "format": "pnpm prettier --write ."
   },
   "lint-staged": {
-    "*.{js,json,css,html}": [
+    "*.{js,json,css,html,yml}": [
       "prettier --write"
     ]
   },

@@ -2,6 +2,8 @@ import './style.css'
 import { mat4 } from 'gl-matrix'
 import { createProgram, getAttribLocation, getUniformLocation } from './engine/gl-utils.js'
 import { createCubeVertexData, CUBE_VERTEX_COUNT } from './game/cube-geometry.js'
+import { CameraMode, cameraState, resetCameraTilt, computeViewMatrix } from './engine/camera.js'
+import { initMouseCameraControls } from './engine/mouse-camera-controls.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
 import vertexShaderSourceCode from './shaders/cube.vert.glsl?raw'
@@ -70,15 +72,32 @@ gl.enable(gl.DEPTH_TEST)
 // Placed/rotated in world space, recomputed every frame since the cube spins
 const modelMatrix = mat4.create()
 
-// Fixed camera, mat4.lookAt takes (eye position, target, up direction)
-const viewMatrix = mat4.create()
-mat4.lookAt(viewMatrix, [0, 1.5, 4], [0, 0, 0], [0, 1, 0])
+// Current camera mode, switchable with the "C" key
+let currentCameraMode = CameraMode.ANGLED_TOP_DOWN
+
+const cameraTarget = [0, 0, 0]
+const fieldOfViewDegrees = 60
+
+initMouseCameraControls(canvas, cameraState)
+
+window.addEventListener('keydown', (event) => {
+  const key = event.key.toLocaleLowerCase()
+
+  if (key === 'c') {
+    currentCameraMode =
+      currentCameraMode === CameraMode.ANGLED_TOP_DOWN
+        ? CameraMode.CHASE
+        : CameraMode.ANGLED_TOP_DOWN
+
+    resetCameraTilt(currentCameraMode)
+  }
+})
 
 // Depends on canvas aspect ratio, so recomputed on resize
 const projectionMatrix = mat4.create()
 
 function updateProjectionMatrix() {
-  const fieldOfViewRadians = (60 * Math.PI) / 180
+  const fieldOfViewRadians = (fieldOfViewDegrees * Math.PI) / 180
   const aspect = canvas.width / canvas.height
   const near = 0.1
   const far = 100
@@ -94,6 +113,9 @@ function render(timeMs) {
   mat4.identity(modelMatrix)
   mat4.rotateY(modelMatrix, modelMatrix, timeSeconds)
   mat4.rotateX(modelMatrix, modelMatrix, timeSeconds * 0.6)
+
+  // Recomputed every frame since the mode can change via keypress
+  const viewMatrix = computeViewMatrix(currentCameraMode, cameraTarget)
 
   gl.useProgram(cubeShaderProgram)
   gl.uniformMatrix4fv(uModelLocation, false, modelMatrix)

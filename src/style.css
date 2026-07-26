@@ -1,16 +1,51 @@
-html,
-body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
+:root {
+  --bg: oklch(0.18 0 0);
+  --text-muted: oklch(0.62 0 0);
+  --text-subtle: oklch(0.76 0 0);
+  --surface: oklch(1 0 0 / 0.08);
+  --radius-sm: 0.25rem;
+
+  --font-ui: system-ui, sans-serif;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
 body {
+  inline-size: 100%;
+  block-size: 100%;
   overflow: hidden;
+  background: var(--bg);
 }
 
 canvas {
+  position: fixed;
+  inset: 0;
   display: block;
-  width: 100vw;
-  height: 100vh;
+}
+
+#hint {
+  position: fixed;
+  inset-block-end: 1rem;
+  inset-inline-start: 1rem;
+
+  color: var(--text-muted);
+  font: 0.75rem/1.4 var(--font-ui);
+}
+
+#hint kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-subtle);
+
+  font: inherit;
 }

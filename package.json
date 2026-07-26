@@ -23,6 +23,8 @@
     "vite": "^8.1.1"
   },
   "dependencies": {
+    "@loaders.gl/core": "^4.4.3",
+    "@loaders.gl/gltf": "^4.4.3",
     "gl-matrix": "^3.4.4"
   }
 }

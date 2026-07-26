@@ -1,13 +1,13 @@
 import './style.css'
 import { mat4 } from 'gl-matrix'
 import { createProgram, getAttribLocation, getUniformLocation } from './engine/gl-utils.js'
-import { createCubeVertexData, CUBE_VERTEX_COUNT } from './game/cube-geometry.js'
+import { loadModel } from './engine/model-loader.js'
 import { CameraMode, cameraState, resetCameraTilt, computeViewMatrix } from './engine/camera.js'
 import { initMouseCameraControls } from './engine/mouse-camera-controls.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
-import vertexShaderSourceCode from './shaders/cube.vert.glsl?raw'
-import fragmentShaderSourceCode from './shaders/cube.frag.glsl?raw'
+import vertexShaderSourceCode from './shaders/model.vert.glsl?raw'
+import fragmentShaderSourceCode from './shaders/model.frag.glsl?raw'
 
 /** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('canvas')
@@ -19,57 +19,60 @@ if (!gl) {
   throw new Error('WebGL2 is not supported.')
 }
 
-const cubeVertexData = createCubeVertexData()
+// Pauses this module until the model is loaded
+const model = await loadModel('/models/frog.glb')
 
-const cubeGeoBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeGeoBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, cubeVertexData, gl.STATIC_DRAW)
+const modelShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
 
-const cubeShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
+const vertexPositionAttribLocation = getAttribLocation(gl, modelShaderProgram, 'vertexPosition')
 
-const vertexPositionAttribLocation = getAttribLocation(gl, cubeShaderProgram, 'vertexPosition')
-const vertexColorAttribLocation = getAttribLocation(gl, cubeShaderProgram, 'vertexColor')
+const uModelLocation = getUniformLocation(gl, modelShaderProgram, 'uModel')
+const uViewLocation = getUniformLocation(gl, modelShaderProgram, 'uView')
+const uProjectionLocation = getUniformLocation(gl, modelShaderProgram, 'uProjection')
+const uColorLocation = getUniformLocation(gl, modelShaderProgram, 'uColor')
 
-const uModelLocation = getUniformLocation(gl, cubeShaderProgram, 'uModel')
-const uViewLocation = getUniformLocation(gl, cubeShaderProgram, 'uView')
-const uProjectionLocation = getUniformLocation(gl, cubeShaderProgram, 'uProjection')
+// One VAO per mesh part, each with its own color, sharing one shader program
+const renderableParts = model.parts.map((part) => {
+  const vao = gl.createVertexArray()
+  gl.bindVertexArray(vao)
 
-// Vertex Array Object stores the vertex buffer layout so we only bind it when drawing
-const vao = gl.createVertexArray()
-gl.bindVertexArray(vao)
-gl.bindBuffer(gl.ARRAY_BUFFER, cubeGeoBuffer)
+  const positionBuffer = gl.createBuffer()
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, part.positions, gl.STATIC_DRAW)
+  gl.enableVertexAttribArray(vertexPositionAttribLocation)
+  gl.vertexAttribPointer(vertexPositionAttribLocation, 3, gl.FLOAT, false, 0, 0)
 
-// Total byte size of one vertex
-const stride = 6 * Float32Array.BYTES_PER_ELEMENT
+  // Uploaded but not wired up yet, the shader doesn't read vertexNormal
+  // until Phong lighting lands and unused attributes get optimized away
+  const normalBuffer = gl.createBuffer()
+  gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer)
+  gl.bufferData(gl.ARRAY_BUFFER, part.normals, gl.STATIC_DRAW)
 
-gl.enableVertexAttribArray(vertexPositionAttribLocation)
-gl.vertexAttribPointer(
-  vertexPositionAttribLocation,
-  3, // 3 components: x, y, z
-  gl.FLOAT,
-  false,
-  stride,
-  0 // position starts at byte offset 0
-)
+  // Indexed drawing: shared vertices are referenced instead of duplicated
+  const indexBuffer = gl.createBuffer()
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW)
 
-gl.enableVertexAttribArray(vertexColorAttribLocation)
-gl.vertexAttribPointer(
-  vertexColorAttribLocation,
-  3, // 3 components: r, g, b
-  gl.FLOAT,
-  false,
-  stride,
-  3 * Float32Array.BYTES_PER_ELEMENT // color starts after the 3 position floats
-)
+  gl.bindVertexArray(null)
 
-gl.bindVertexArray(null)
+  // glTF picks the smallest index type that fits, so we read it off the array
+  const indexType = part.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+
+  return {
+    vao,
+    indexType,
+    indexCount: part.indices.length,
+    color: part.color,
+  }
+})
+
 gl.clearColor(0.1, 0.1, 0.1, 1.0)
 
 // Without depth testing, triangles draw in submission order instead of
 // nearest distance to camera order, so back faces would bleed through front faces
 gl.enable(gl.DEPTH_TEST)
 
-// Placed/rotated in world space, recomputed every frame since the cube spins
+// Placed/rotated in world space, recomputed every frame since the model spins
 const modelMatrix = mat4.create()
 
 // Current camera mode, switchable with the "C" key
@@ -115,6 +118,7 @@ function updateProjectionMatrix() {
 }
 
 function render(timeMs) {
+  // First frame has no previous timestamp to diff against
   const deltaMs = lastFrameTimeMs === null ? 0 : timeMs - lastFrameTimeMs
   lastFrameTimeMs = timeMs
 
@@ -126,21 +130,27 @@ function render(timeMs) {
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-  // Spin the cube so that we can confirm the pipeline and depth test work
+  // Scale first so we rotate around the (already normalized) object center
   mat4.identity(modelMatrix)
+  mat4.scale(modelMatrix, modelMatrix, [model.scale, model.scale, model.scale])
   mat4.rotateY(modelMatrix, modelMatrix, timeSeconds)
   mat4.rotateX(modelMatrix, modelMatrix, timeSeconds * 0.6)
 
   // Recomputed every frame since the mode can change via keypress
   const viewMatrix = computeViewMatrix(currentCameraMode, cameraTarget)
 
-  gl.useProgram(cubeShaderProgram)
+  gl.useProgram(modelShaderProgram)
   gl.uniformMatrix4fv(uModelLocation, false, modelMatrix)
   gl.uniformMatrix4fv(uViewLocation, false, viewMatrix)
   gl.uniformMatrix4fv(uProjectionLocation, false, projectionMatrix)
 
-  gl.bindVertexArray(vao)
-  gl.drawArrays(gl.TRIANGLES, 0, CUBE_VERTEX_COUNT)
+  // Same model/view/projection for every part so they move as one object,
+  // but each part sets its own color before drawing
+  for (const part of renderableParts) {
+    gl.uniform3fv(uColorLocation, part.color)
+    gl.bindVertexArray(part.vao)
+    gl.drawElements(gl.TRIANGLES, part.indexCount, part.indexType, 0)
+  }
   gl.bindVertexArray(null)
 
   requestAnimationFrame(render)

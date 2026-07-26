@@ -3,23 +3,21 @@ name: Deploy Frogger3D
 on:
   push:
     branches:
-      - main
+      - '**'
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: 'pages'
+  group: "pages"
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: preview
+      url: ${{ steps.target.outputs.url }}
 
     steps:
       - name: Checkout
@@ -42,11 +40,23 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
+      - name: Determine deploy target
+        id: target
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+          if [ "$BRANCH" = "main" ]; then
+            echo "dir=" >> "$GITHUB_OUTPUT"
+            echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/" >> "$GITHUB_OUTPUT"
+          else
+            SAFE=$(echo "$BRANCH" | tr '/' '-')
+            echo "dir=branches/$SAFE" >> "$GITHUB_OUTPUT"
+            echo "url=https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/branches/$SAFE/" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Deploy GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist
+          destination_dir: ${{ steps.target.outputs.dir }}
+          keep_files: true

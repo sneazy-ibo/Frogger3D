@@ -1,4 +1,5 @@
 import { createBoxGeometry, transformGeometry, mergeGeometries } from '../engine/geometry.js'
+import { createRandom } from '../engine/random.js'
 
 export const LaneType = {
   GRASS: 'grass',
@@ -7,19 +8,14 @@ export const LaneType = {
   WATER: 'water',
 }
 
-// Scene spans this far on both sides of x = 0, doubled from the first
-// pass so there's more room to move once the player controls the frog
+// Scene spans this far on both sides of x = 0
 const SCENE_WIDTH = 28
 
-// Every lane is exactly this deep, regardless of type. The frog will
-// move with fixed-size hops, so lanes can't vary in depth the way they
-// did before (6 / 3.6 / 2.4), a single hop needs to reliably land in
-// the next lane no matter what type it is.
+// Every lane is exactly this deep, regardless of type, so a single hop
+// reliably lands in the next lane no matter what type it is
 export const LANE_DEPTH = 3.6
 
-// Lane order from the player's start (near z) to the goal (far z).
-// Mix of types (and repeated types) so the level doesn't feel like a
-// single repeating pattern, but every entry uses the same LANE_DEPTH.
+// Lane order from the player's start (near z) to the goal (far z)
 const LANE_LAYOUT = [
   { type: LaneType.GRASS, depth: LANE_DEPTH },
   { type: LaneType.ROAD, depth: LANE_DEPTH },
@@ -37,9 +33,8 @@ const LANE_LAYOUT = [
   { type: LaneType.GRASS, depth: LANE_DEPTH },
 ]
 
-// Height of each lane's top surface. Medians sit slightly raised like a
-// curb, water sits slightly recessed like a riverbed, small details that
-// make the flat lanes read as distinct materials rather than just color.
+// Height of each lane's top surface: medians raised like a curb, water
+// recessed like a riverbed, so flat lanes still read as distinct materials
 const SURFACE_HEIGHT = {
   [LaneType.GRASS]: 0,
   [LaneType.ROAD]: 0,
@@ -64,19 +59,6 @@ const COLORS = {
   rock: [0.45, 0.45, 0.47],
 }
 
-// Small deterministic PRNG (mulberry32) so tree/bush/rock placement looks
-// scattered but is identical on every load instead of reshuffling.
-function createRandom(seed) {
-  let state = seed
-  return function random() {
-    state |= 0
-    state = (state + 0x6d2b79f5) | 0
-    let t = Math.imul(state ^ (state >>> 15), 1 | state)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
 // Builds the whole static level ground: lanes, lane markings, median
 // stripes, and scattered decoration on the grass lanes. Everything is
 // merged by color into a handful of draw calls, in the same
@@ -99,9 +81,7 @@ export function buildScene(seed = 1) {
   const totalDepth = LANE_LAYOUT.reduce((sum, lane) => sum + lane.depth, 0)
   const startZ = -totalDepth / 2 // center the whole level around z = 0
 
-  // The frog should stand in the middle of the first (start) lane, not at
-  // the world origin, used by main.js to place both the model and the
-  // camera target
+  // Frog should start in the middle of the first lane, not at the origin
   const playerStart = { x: 0, z: startZ + LANE_LAYOUT[0].depth / 2 }
 
   let cursorZ = startZ
@@ -109,6 +89,11 @@ export function buildScene(seed = 1) {
   let waterLaneIndex = 0
 
   let previousLaneType = null
+
+  const roadLanes = []
+
+  // Every lane in play order, each carrying its own z-range
+  const lanes = []
 
   for (const lane of LANE_LAYOUT) {
     const centerZ = cursorZ + lane.depth / 2
@@ -141,8 +126,19 @@ export function buildScene(seed = 1) {
       addHazardStripes(addGeometry, centerZ, lane.depth, surfaceY)
     }
 
-    // A divider belongs at the boundary between two road lanes, not at a
-    // lane's own center, the center is where the frog lands on every hop
+    const roadLaneIndex = lane.type === LaneType.ROAD ? roadLanes.length : null
+    if (lane.type === LaneType.ROAD) {
+      roadLanes.push({ centerZ, depth: lane.depth })
+    }
+
+    lanes.push({
+      type: lane.type,
+      startZ: cursorZ,
+      endZ: cursorZ + lane.depth,
+      roadLaneIndex,
+    })
+
+    // Dividers belong at boundaries between road lanes, not lane centers
     if (previousLaneType === LaneType.ROAD && lane.type === LaneType.ROAD) {
       addLaneMarkings(addGeometry, cursorZ, surfaceY)
     }
@@ -158,12 +154,13 @@ export function buildScene(seed = 1) {
   return {
     parts,
     playerStart,
-    // Exposed for later use (player movement bounds, camera framing, ...)
+    roadLanes,
+    lanes,
     bounds: { width: SCENE_WIDTH, startZ, endZ: startZ + totalDepth },
   }
 }
 
-// Low-poly tree: a trunk box topped by a wider crown box.
+// Low-poly tree: a trunk box topped by a wider crown box
 function addTree(addGeometry, random, x, z, surfaceY) {
   const trunkHeight = 0.8 + random() * 0.3
   const trunk = createBoxGeometry(0.25, trunkHeight, 0.25)
@@ -212,9 +209,7 @@ function addRock(addGeometry, random, x, z, surfaceY) {
   )
 }
 
-// Scatters a handful of trees/bushes/rocks across a grass lane. Kept away
-// from x = 0 loosely (not excluded entirely) since there's no player
-// movement yet to worry about blocking a path.
+// Scatters trees/bushes/rocks across a grass lane
 function scatterGrassProps(addGeometry, random, centerZ, depth, surfaceY) {
   const propCount = 22
   for (let i = 0; i < propCount; i++) {
@@ -249,8 +244,7 @@ function addLaneMarkings(addGeometry, boundaryZ, surfaceY) {
   }
 }
 
-// Alternating yellow/black hazard stripes on the median strips between
-// road and water sections.
+// Alternating yellow/black hazard stripes on median strips
 function addHazardStripes(addGeometry, centerZ, depth, surfaceY) {
   const stripeWidth = 0.6
   const stripeHeight = 0.02

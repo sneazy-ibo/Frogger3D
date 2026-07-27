@@ -1,15 +1,7 @@
 import { mat4, mat3, vec3 } from 'gl-matrix'
 
-// Procedural primitive generators: axis-aligned box and flat plane, both
-// built in local space and then baked into world space via
-// transformGeometry(). Baking transforms in means many instances (tiles,
-// trees, lane markings, ...) can be merged into one buffer and drawn with
-// a single, static (identity) model matrix, same as everything else the
-// renderer already draws.
-
 // Box centered on the origin, spanning [-size/2, size/2] on every axis.
-// Each face gets its own 4 vertices so normals stay flat across edges
-// (no smoothing), which fits a low-poly/stylized look.
+// Each face gets its own 4 vertices so normals stay flat across edges.
 export function createBoxGeometry(width, height, depth) {
   const x = width / 2
   const y = height / 2
@@ -18,27 +10,27 @@ export function createBoxGeometry(width, height, depth) {
   // prettier-ignore
   const positions = new Float32Array([
     // +X face
-    x, -y, -z,   x, -y, z,   x, y, z,   x, y, -z,
+    x, -y, -z,   x, -y, z,   x, y, z,      x, y, -z,
     // -X face
-    -x, -y, z,   -x, -y, -z,   -x, y, -z,   -x, y, z,
+    -x, -y, z,  -x, -y, -z, -x, y, -z,    -x, y, z,
     // +Y face
-    -x, y, -z,   x, y, -z,   x, y, z,   -x, y, z,
+    -x, y, -z,   x, y, -z,   x, y, z,     -x, y, z,
     // -Y face
     -x, -y, z,   x, -y, z,   x, -y, -z,   -x, -y, -z,
     // +Z face
-    -x, -y, z,   x, -y, z,   x, y, z,   -x, y, z,
+    -x, -y, z,   x, -y, z,   x, y, z,     -x, y, z,
     // -Z face
-    x, -y, -z,   -x, -y, -z,   -x, y, -z,   x, y, -z,
+    x, -y, -z,  -x, -y, -z, -x, y, -z,     x, y, -z,
   ])
 
   // prettier-ignore
   const normals = new Float32Array([
     1, 0, 0,   1, 0, 0,   1, 0, 0,   1, 0, 0,
-    -1, 0, 0,   -1, 0, 0,   -1, 0, 0,   -1, 0, 0,
+   -1, 0, 0,  -1, 0, 0,  -1, 0, 0,  -1, 0, 0,
     0, 1, 0,   0, 1, 0,   0, 1, 0,   0, 1, 0,
-    0, -1, 0,   0, -1, 0,   0, -1, 0,   0, -1, 0,
+    0, -1, 0,  0, -1, 0,  0, -1, 0,  0, -1, 0,
     0, 0, 1,   0, 0, 1,   0, 0, 1,   0, 0, 1,
-    0, 0, -1,   0, 0, -1,   0, 0, -1,   0, 0, -1,
+    0, 0, -1,  0, 0, -1,  0, 0, -1,  0, 0, -1,
   ])
 
   // Two triangles per face, 6 faces, following the vertex order above
@@ -52,42 +44,11 @@ export function createBoxGeometry(width, height, depth) {
   return { positions, normals, indices }
 }
 
-// Flat quad in the XZ plane, facing +Y, spanning [-size/2, size/2] on X/Z.
-// Useful for anything that should read as perfectly flat ground.
-export function createPlaneGeometry(width, depth) {
-  const x = width / 2
-  const z = depth / 2
-
-  // prettier-ignore
-  const positions = new Float32Array([
-    -x, 0, -z,
-     x, 0, -z,
-     x, 0,  z,
-    -x, 0,  z,
-  ])
-
-  // prettier-ignore
-  const normals = new Float32Array([
-    0, 1, 0,
-    0, 1, 0,
-    0, 1, 0,
-    0, 1, 0,
-  ])
-
-  const indices = new Uint32Array([0, 1, 2, 0, 2, 3])
-
-  return { positions, normals, indices }
-}
-
-// Applies an arbitrary 4x4 matrix to a geometry's positions and normals,
-// baking the transform into fresh vertex data. Shared by transformGeometry
-// below (which builds the matrix from position/rotationY/scale) and by
-// the model loader (which builds it by walking a glTF node hierarchy),
-// both just need "take this geometry, apply this matrix" once they have
-// the matrix in hand.
+// Applies a 4x4 matrix to a geometry's positions and normals, baking the
+// transform into fresh vertex data. Used by transformGeometry() below and
+// by the model loader (which builds its matrix from a glTF node instead).
 export function applyMatrixToGeometry(geometry, matrix) {
-  // Non-uniform scale needs the inverse-transpose for correct normals,
-  // same reasoning as the per-frame normal matrix in main.js
+  // Non-uniform scale needs the inverse-transpose for correct normals
   const normalMatrix = mat3.create()
   mat3.normalFromMat4(normalMatrix, matrix)
 
@@ -112,8 +73,8 @@ export function applyMatrixToGeometry(geometry, matrix) {
 }
 
 // Bakes a translate/rotateY/scale transform into a geometry's own vertex
-// data (positions and normals), so the result can be merged with other
-// instances and drawn without any further per-instance uniform.
+// data, so the result can be merged with other instances and drawn
+// without any further per-instance uniform.
 export function transformGeometry(
   geometry,
   { position = [0, 0, 0], rotationY = 0, scale = [1, 1, 1] } = {}
@@ -127,8 +88,8 @@ export function transformGeometry(
 }
 
 // Concatenates already-transformed geometries that share a color into one
-// {positions, normals, indices, color} part, the same shape the model
-// loader produces, so both can be turned into VAOs the same way.
+// {positions, normals, indices, color} part, the shape the model loader
+// also produces, so both can be turned into VAOs the same way.
 export function mergeGeometries(geometries, color) {
   let vertexCount = 0
   let indexCount = 0

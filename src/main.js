@@ -10,7 +10,7 @@ import { loadModel } from './engine/model-loader.js'
 import {
   CameraMode,
   cameraState,
-  resetCameraTilt,
+  resetCameraToPreset,
   computeViewMatrix,
   computeCameraPosition,
 } from './engine/camera.js'
@@ -18,6 +18,8 @@ import { initMouseCameraControls } from './engine/mouse-camera-controls.js'
 import { lightState, computeLightColor } from './engine/light.js'
 import { initLightControls } from './engine/light-controls.js'
 import { buildScene } from './game/scene.js'
+import { createPlayerState, updatePlayer } from './game/player.js'
+import { initPlayerControls } from './game/player-controls.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
 import vertexShaderSourceCode from './shaders/model.vert.glsl?raw'
@@ -34,7 +36,7 @@ if (!gl) {
 }
 
 // Pauses this module until the model is loaded
-const model = await loadModel('/models/frog.glb', { materialGamma: 1.6 })
+const model = await loadModel('./models/frog.glb', { materialGamma: 1.6 })
 
 // Static level geometry (lanes, props, markings)
 const scene = buildScene()
@@ -70,8 +72,7 @@ gl.clearColor(0.1, 0.1, 0.1, 1.0)
 // nearest distance to camera order, so back faces would bleed through front faces
 gl.enable(gl.DEPTH_TEST)
 
-// Placed at the scene's start position; recomputed every frame since this
-// will need to track player movement once the frog becomes controllable
+// Placed at the scene's start position; recomputed every frame to track player movement
 const modelMatrix = mat4.create()
 
 // The scene is static and its vertex data already lives in world space
@@ -80,17 +81,18 @@ const sceneModelMatrix = mat4.create()
 const sceneNormalMatrix = mat3.create()
 
 // Current camera mode, switchable with the "C" key
-let currentCameraMode = CameraMode.ANGLED_TOP_DOWN
+let currentCameraMode = CameraMode.THIRD_PERSON
 
 let isPaused = false
 let animationTimeMs = 0
 let lastFrameTimeMs = null
 
-const cameraTarget = [scene.playerStart.x, 0, scene.playerStart.z]
+const playerState = createPlayerState(scene.playerStart, scene.bounds)
 const fieldOfViewDegrees = 60
 
 initMouseCameraControls(canvas, cameraState)
 initLightControls(lightState)
+initPlayerControls(playerState, () => animationTimeMs)
 
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLocaleLowerCase()
@@ -98,11 +100,11 @@ window.addEventListener('keydown', (event) => {
   switch (key) {
     case 'c':
       currentCameraMode =
-        currentCameraMode === CameraMode.ANGLED_TOP_DOWN
-          ? CameraMode.CHASE
-          : CameraMode.ANGLED_TOP_DOWN
+        currentCameraMode === CameraMode.THIRD_PERSON
+          ? CameraMode.TOP_DOWN
+          : CameraMode.THIRD_PERSON
 
-      resetCameraTilt(currentCameraMode)
+      resetCameraToPreset(currentCameraMode)
       break
 
     case 'p':
@@ -140,15 +142,20 @@ function render(timeMs) {
 
   if (!isPaused) {
     animationTimeMs += deltaMs
+    updatePlayer(playerState, animationTimeMs)
   }
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-  // Scale to the model's normalized size, then move it to its spot in the
-  // scene (currently fixed; will track player input later)
+  // Scale to the model's normalized size, lift it by the current hop
+  // height, then move it to its spot in the scene
   mat4.identity(modelMatrix)
-  mat4.translate(modelMatrix, modelMatrix, [scene.playerStart.x, 0, scene.playerStart.z])
+  mat4.translate(modelMatrix, modelMatrix, [playerState.x, playerState.hopHeight, playerState.z])
+  mat4.rotateY(modelMatrix, modelMatrix, playerState.facing)
   mat4.scale(modelMatrix, modelMatrix, [model.scale, model.scale, model.scale])
+
+  // Follows the player, so it's recomputed every frame
+  const cameraTarget = [playerState.x, 0, playerState.z]
 
   // Recomputed every frame since the mode can change via keypress
   const viewMatrix = computeViewMatrix(currentCameraMode, cameraTarget)

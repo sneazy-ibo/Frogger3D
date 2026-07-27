@@ -15,7 +15,7 @@ const SCENE_WIDTH = 28
 // move with fixed-size hops, so lanes can't vary in depth the way they
 // did before (6 / 3.6 / 2.4), a single hop needs to reliably land in
 // the next lane no matter what type it is.
-const LANE_DEPTH = 3.6
+export const LANE_DEPTH = 3.6
 
 // Lane order from the player's start (near z) to the goal (far z).
 // Mix of types (and repeated types) so the level doesn't feel like a
@@ -108,6 +108,8 @@ export function buildScene(seed = 1) {
   let grassLaneIndex = 0
   let waterLaneIndex = 0
 
+  let previousLaneType = null
+
   for (const lane of LANE_LAYOUT) {
     const centerZ = cursorZ + lane.depth / 2
     const surfaceY = SURFACE_HEIGHT[lane.type]
@@ -135,12 +137,17 @@ export function buildScene(seed = 1) {
 
     if (lane.type === LaneType.GRASS) {
       scatterGrassProps(addGeometry, random, centerZ, lane.depth, surfaceY)
-    } else if (lane.type === LaneType.ROAD) {
-      addLaneMarkings(addGeometry, centerZ, surfaceY)
     } else if (lane.type === LaneType.MEDIAN) {
       addHazardStripes(addGeometry, centerZ, lane.depth, surfaceY)
     }
 
+    // A divider belongs at the boundary between two road lanes, not at a
+    // lane's own center, the center is where the frog lands on every hop
+    if (previousLaneType === LaneType.ROAD && lane.type === LaneType.ROAD) {
+      addLaneMarkings(addGeometry, cursorZ, surfaceY)
+    }
+
+    previousLaneType = lane.type
     cursorZ += lane.depth
   }
 
@@ -225,8 +232,8 @@ function scatterGrassProps(addGeometry, random, centerZ, depth, surfaceY) {
   }
 }
 
-// Dashed center line down a road lane, like a real road.
-function addLaneMarkings(addGeometry, centerZ, surfaceY) {
+// Dashed divider line along a boundary between two road lanes
+function addLaneMarkings(addGeometry, boundaryZ, surfaceY) {
   const dashWidth = 0.6
   const gap = 0.4
   const dashDepth = 0.12
@@ -236,7 +243,7 @@ function addLaneMarkings(addGeometry, centerZ, surfaceY) {
   for (let x = -SCENE_WIDTH / 2 + dashWidth; x < SCENE_WIDTH / 2; x += step) {
     const dash = createBoxGeometry(dashWidth, dashHeight, dashDepth)
     addGeometry(
-      transformGeometry(dash, { position: [x, surfaceY + dashHeight / 2, centerZ] }),
+      transformGeometry(dash, { position: [x, surfaceY + dashHeight / 2, boundaryZ] }),
       COLORS.laneMarking
     )
   }

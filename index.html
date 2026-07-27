@@ -14,6 +14,39 @@
       Press <kbd>P</kbd> to pause
     </p>
 
+    <div id="light-panel">
+      <h2>Light</h2>
+
+      <div class="control">
+        <label for="light-x">X</label>
+        <input id="light-x" type="range" min="-10" max="10" step="0.1" value="5" />
+        <output id="light-x-value" for="light-x">5.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-y">Y</label>
+        <input id="light-y" type="range" min="0" max="15" step="0.1" value="8" />
+        <output id="light-y-value" for="light-y">8.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-z">Z</label>
+        <input id="light-z" type="range" min="-10" max="10" step="0.1" value="5" />
+        <output id="light-z-value" for="light-z">5.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-intensity">Intensity</label>
+        <input id="light-intensity" type="range" min="0" max="3" step="0.1" value="1" />
+        <output id="light-intensity-value" for="light-intensity">1.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-color">Color</label>
+        <input id="light-color" type="color" value="#ffffff" />
+      </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

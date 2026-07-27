@@ -1,9 +1,17 @@
 import './style.css'
-import { mat4 } from 'gl-matrix'
+import { mat4, mat3 } from 'gl-matrix'
 import { createProgram, getAttribLocation, getUniformLocation } from './engine/gl-utils.js'
 import { loadModel } from './engine/model-loader.js'
-import { CameraMode, cameraState, resetCameraTilt, computeViewMatrix } from './engine/camera.js'
+import {
+  CameraMode,
+  cameraState,
+  resetCameraTilt,
+  computeViewMatrix,
+  computeCameraPosition,
+} from './engine/camera.js'
 import { initMouseCameraControls } from './engine/mouse-camera-controls.js'
+import { lightState, computeLightColor } from './engine/light.js'
+import { initLightControls } from './engine/light-controls.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
 import vertexShaderSourceCode from './shaders/model.vert.glsl?raw'
@@ -25,11 +33,16 @@ const model = await loadModel('/models/frog.glb')
 const modelShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
 
 const vertexPositionAttribLocation = getAttribLocation(gl, modelShaderProgram, 'vertexPosition')
+const vertexNormalAttribLocation = getAttribLocation(gl, modelShaderProgram, 'vertexNormal')
 
 const uModelLocation = getUniformLocation(gl, modelShaderProgram, 'uModel')
 const uViewLocation = getUniformLocation(gl, modelShaderProgram, 'uView')
 const uProjectionLocation = getUniformLocation(gl, modelShaderProgram, 'uProjection')
 const uColorLocation = getUniformLocation(gl, modelShaderProgram, 'uColor')
+const uNormalMatrixLocation = getUniformLocation(gl, modelShaderProgram, 'uNormalMatrix')
+const uLightPositionLocation = getUniformLocation(gl, modelShaderProgram, 'uLightPosition')
+const uLightColorLocation = getUniformLocation(gl, modelShaderProgram, 'uLightColor')
+const uViewPositionLocation = getUniformLocation(gl, modelShaderProgram, 'uViewPosition')
 
 // One VAO per mesh part, each with its own color, sharing one shader program
 const renderableParts = model.parts.map((part) => {
@@ -42,11 +55,11 @@ const renderableParts = model.parts.map((part) => {
   gl.enableVertexAttribArray(vertexPositionAttribLocation)
   gl.vertexAttribPointer(vertexPositionAttribLocation, 3, gl.FLOAT, false, 0, 0)
 
-  // Uploaded but not wired up yet, the shader doesn't read vertexNormal
-  // until Phong lighting lands and unused attributes get optimized away
   const normalBuffer = gl.createBuffer()
   gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer)
   gl.bufferData(gl.ARRAY_BUFFER, part.normals, gl.STATIC_DRAW)
+  gl.enableVertexAttribArray(vertexNormalAttribLocation)
+  gl.vertexAttribPointer(vertexNormalAttribLocation, 3, gl.FLOAT, false, 0, 0)
 
   // Indexed drawing: shared vertices are referenced instead of duplicated
   const indexBuffer = gl.createBuffer()
@@ -86,6 +99,7 @@ const cameraTarget = [0, 0, 0]
 const fieldOfViewDegrees = 60
 
 initMouseCameraControls(canvas, cameraState)
+initLightControls(lightState)
 
 window.addEventListener('keydown', (event) => {
   const key = event.key.toLocaleLowerCase()
@@ -139,10 +153,21 @@ function render(timeMs) {
   // Recomputed every frame since the mode can change via keypress
   const viewMatrix = computeViewMatrix(currentCameraMode, cameraTarget)
 
+  // Inverse transpose of modelMatrix's upper 3x3, so normals transform
+  // correctly even if the model is ever scaled non uniformly
+  const normalMatrix = mat3.create()
+  mat3.normalFromMat4(normalMatrix, modelMatrix)
+
+  const cameraPosition = computeCameraPosition(cameraTarget)
+
   gl.useProgram(modelShaderProgram)
   gl.uniformMatrix4fv(uModelLocation, false, modelMatrix)
   gl.uniformMatrix4fv(uViewLocation, false, viewMatrix)
   gl.uniformMatrix4fv(uProjectionLocation, false, projectionMatrix)
+  gl.uniformMatrix3fv(uNormalMatrixLocation, false, normalMatrix)
+  gl.uniform3fv(uLightPositionLocation, lightState.position)
+  gl.uniform3fv(uLightColorLocation, computeLightColor())
+  gl.uniform3fv(uViewPositionLocation, cameraPosition)
 
   // Same model/view/projection for every part so they move as one object,
   // but each part sets its own color before drawing

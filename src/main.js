@@ -30,7 +30,13 @@ import {
 } from './game/player.js'
 import { initPlayerControls } from './game/player-controls.js'
 import { createTrafficState, updateTraffic } from './game/traffic.js'
-import { checkCarCollision, checkWaterHazard } from './game/collision.js'
+import {
+  createFloatState,
+  updateFloats,
+  buildFloatGeometry,
+  getFloatSurfaceY,
+} from './game/floats.js'
+import { checkCarCollision, checkWaterHazard, getFloatUnderPlayer } from './game/collision.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
 import vertexShaderSourceCode from './shaders/model.vert.glsl?raw'
@@ -60,6 +66,10 @@ const scene = buildScene()
 // One fixed direction/speed per road lane, plus a row of cars in each
 const trafficState = createTrafficState(scene.roadLanes, scene.bounds)
 
+// Same idea for water lanes, but with logs/lily pads instead of cars
+const floatState = createFloatState(scene.waterLanes, scene.bounds)
+const floatGeometryByType = buildFloatGeometry()
+
 const modelShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
 
 const vertexPositionAttribLocation = getAttribLocation(gl, modelShaderProgram, 'vertexPosition')
@@ -84,6 +94,15 @@ const frogRenderableParts = createRenderableParts(gl, model.parts, attribLocatio
 const sceneRenderableParts = createRenderableParts(gl, scene.parts, attribLocations)
 const carRenderableParts = createRenderableParts(gl, carModel.parts, attribLocations)
 
+// One renderable per float type (log, lily pad); each water lane picks
+// the right one by its `type` when drawing
+const floatRenderablePartsByType = Object.fromEntries(
+  Object.entries(floatGeometryByType).map(([type, parts]) => [
+    type,
+    createRenderableParts(gl, parts, attribLocations),
+  ])
+)
+
 gl.clearColor(0.1, 0.1, 0.1, 1.0)
 
 // Without depth testing, triangles draw in submission order instead of
@@ -105,6 +124,9 @@ let currentCameraMode = CameraMode.THIRD_PERSON
 let isPaused = false
 let animationTimeMs = 0
 let lastFrameTimeMs = null
+
+// Height of whatever the frog is currently standing on, relative to ground level
+let currentFloatSurfaceY = 0
 
 const playerState = createPlayerState(scene.playerStart, scene.bounds)
 const fieldOfViewDegrees = 60
@@ -179,6 +201,29 @@ function drawTraffic(trafficState) {
   }
 }
 
+// Reused every frame instead of allocated per-float
+const floatModelMatrix = mat4.create()
+const floatNormalMatrix = mat3.create()
+
+// Floats reuse one geometry per type (baked at the water's surface
+// height already), translated along their lane's z and along x by
+// however far updateFloats has moved them
+function drawFloats(floatState) {
+  for (const lane of floatState) {
+    const parts = floatRenderablePartsByType[lane.type]
+
+    for (const float of lane.floats) {
+      mat4.identity(floatModelMatrix)
+      mat4.translate(floatModelMatrix, floatModelMatrix, [float.x, 0, lane.centerZ])
+      mat4.scale(floatModelMatrix, floatModelMatrix, [float.scaleX, 1, float.scaleZ])
+
+      mat3.normalFromMat4(floatNormalMatrix, floatModelMatrix)
+
+      drawParts(parts, floatModelMatrix, floatNormalMatrix)
+    }
+  }
+}
+
 function render(timeMs) {
   // First frame has no previous timestamp to diff against
   const deltaMs = lastFrameTimeMs === null ? 0 : timeMs - lastFrameTimeMs
@@ -188,13 +233,28 @@ function render(timeMs) {
     animationTimeMs += deltaMs
     updatePlayer(playerState, animationTimeMs)
     updateTraffic(trafficState, deltaMs)
+    updateFloats(floatState, deltaMs)
+
+    currentFloatSurfaceY = 0
 
     if (!playerState.death) {
       if (checkCarCollision(playerState, trafficState, scene)) {
         const type = playerState.hop ? DeathType.SQUASHED_AIR : DeathType.SQUASHED_GROUND
         startDeath(playerState, type, animationTimeMs)
-      } else if (!playerState.hop && checkWaterHazard(playerState, scene)) {
-        startDeath(playerState, DeathType.DROWNED, animationTimeMs)
+      } else if (!playerState.hop) {
+        const ride = getFloatUnderPlayer(playerState, floatState, scene)
+
+        if (ride) {
+          playerState.x += ride.speed * (deltaMs / 1000)
+          currentFloatSurfaceY = getFloatSurfaceY(ride.type)
+
+          const halfWidth = scene.bounds.width / 2
+          if (playerState.x < -halfWidth || playerState.x > halfWidth) {
+            startDeath(playerState, DeathType.DROWNED, animationTimeMs)
+          }
+        } else if (checkWaterHazard(playerState, floatState, scene)) {
+          startDeath(playerState, DeathType.DROWNED, animationTimeMs)
+        }
       }
     }
 
@@ -214,7 +274,7 @@ function render(timeMs) {
   mat4.identity(modelMatrix)
   mat4.translate(modelMatrix, modelMatrix, [
     playerState.x,
-    playerState.hopHeight + (deathTransform ? deathTransform.offsetY : 0),
+    playerState.hopHeight + currentFloatSurfaceY + (deathTransform ? deathTransform.offsetY : 0),
     playerState.z,
   ])
   mat4.rotateY(modelMatrix, modelMatrix, playerState.facing)
@@ -245,8 +305,8 @@ function render(timeMs) {
   gl.uniform3fv(uLightColorLocation, computeLightColor())
   gl.uniform3fv(uViewPositionLocation, cameraPosition)
 
-  // Ground/props first, then cars on the road lanes, then the frog on top
   drawParts(sceneRenderableParts, sceneModelMatrix, sceneNormalMatrix)
+  drawFloats(floatState)
   drawTraffic(trafficState)
   drawParts(frogRenderableParts, modelMatrix, normalMatrix)
 

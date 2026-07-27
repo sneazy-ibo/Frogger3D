@@ -1,5 +1,5 @@
 export const lightState = {
-  position: [5, 8, 5],
+  position: [60, 90, 60],
   color: [1, 1, 1],
   intensity: 1,
 }

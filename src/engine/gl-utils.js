@@ -48,3 +48,39 @@ export function getUniformLocation(gl, program, name) {
   }
   return location
 }
+
+// Turns a list of {positions, normals, indices, color} parts into one VAO and draw info per part
+export function createRenderableParts(gl, parts, { positionLocation, normalLocation }) {
+  return parts.map((part) => {
+    const vao = gl.createVertexArray()
+    gl.bindVertexArray(vao)
+
+    const positionBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, part.positions, gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(positionLocation)
+    gl.vertexAttribPointer(positionLocation, 3, gl.FLOAT, false, 0, 0)
+
+    const normalBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer)
+    gl.bufferData(gl.ARRAY_BUFFER, part.normals, gl.STATIC_DRAW)
+    gl.enableVertexAttribArray(normalLocation)
+    gl.vertexAttribPointer(normalLocation, 3, gl.FLOAT, false, 0, 0)
+
+    // Indexed drawing: shared vertices are referenced instead of duplicated
+    const indexBuffer = gl.createBuffer()
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer)
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, part.indices, gl.STATIC_DRAW)
+
+    gl.bindVertexArray(null)
+
+    const indexType = part.indices instanceof Uint32Array ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT
+
+    return {
+      vao,
+      indexType,
+      indexCount: part.indices.length,
+      color: part.color,
+    }
+  })
+}

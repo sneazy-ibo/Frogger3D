@@ -17,7 +17,35 @@ function linearToDisplayColor([r, g, b], gamma) {
   return [r ** exponent, g ** exponent, b ** exponent]
 }
 
-// Expands a running [min, max] bounding box (per axis) with a position array
+function averageTextureColor(image, uvs, fallbackColor) {
+  const canvas = document.createElement('canvas')
+  canvas.width = image.width
+  canvas.height = image.height
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(image, 0, 0)
+  const { data } = ctx.getImageData(0, 0, image.width, image.height)
+
+  let r = 0
+  let g = 0
+  let b = 0
+  let count = 0
+  for (let i = 0; i < uvs.length; i += 2) {
+    const x = Math.max(0, Math.min(image.width - 1, Math.floor(uvs[i] * image.width)))
+    // glTF's v axis is flipped relative to canvas y
+    const y = Math.max(0, Math.min(image.height - 1, Math.floor((1 - uvs[i + 1]) * image.height)))
+    const pixel = (y * image.width + x) * 4
+
+    if (data[pixel + 3] === 0) continue // fully transparent texel, not real color
+    r += data[pixel]
+    g += data[pixel + 1]
+    b += data[pixel + 2]
+    count++
+  }
+
+  if (count === 0) return fallbackColor
+  return [r / count / 255, g / count / 255, b / count / 255]
+}
+
 function expandBounds(min, max, positions) {
   for (let i = 0; i < positions.length; i += 3) {
     for (let axis = 0; axis < 3; axis++) {
@@ -57,7 +85,10 @@ function collectMeshInstances(node, parentWorldMatrix, instances) {
 // Loads a .glb and pulls out every mesh as a separate part, baking in
 // each mesh's accumulated node transform so the geometry ends up in one
 // consistent space before it's scaled/placed in main.js.
-export async function loadModel(url, { materialGamma = 1 } = {}) {
+export async function loadModel(
+  url,
+  { materialGamma = 1, targetSize = DEFAULT_TARGET_SIZE, fallbackColor = DEFAULT_COLOR } = {}
+) {
   const gltf = await load(url, GLTFLoader)
   const processed = postProcessGLTF(gltf)
 
@@ -77,10 +108,17 @@ export async function loadModel(url, { materialGamma = 1 } = {}) {
       worldMatrix
     )
 
+    const texture = primitive.material?.pbrMetallicRoughness?.baseColorTexture?.texture
+    const image = texture?.source?.image
+    const uvs = primitive.attributes.TEXCOORD_0?.value
+
     const baseColorFactor = primitive.material?.pbrMetallicRoughness?.baseColorFactor
-    const color = baseColorFactor
-      ? linearToDisplayColor(baseColorFactor, materialGamma)
-      : DEFAULT_COLOR
+    const color =
+      image && uvs
+        ? averageTextureColor(image, uvs, fallbackColor)
+        : baseColorFactor
+          ? linearToDisplayColor(baseColorFactor, materialGamma)
+          : fallbackColor
 
     return { positions, normals, indices: primitive.indices.value, color }
   })
@@ -102,7 +140,7 @@ export async function loadModel(url, { materialGamma = 1 } = {}) {
   }
 
   const largestDimension = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2])
-  const scale = TARGET_SIZE / largestDimension
+  const scale = targetSize / largestDimension
 
   return { parts, scale }
 }

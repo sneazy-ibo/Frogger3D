@@ -18,8 +18,19 @@ import { initMouseCameraControls } from './engine/mouse-camera-controls.js'
 import { lightState, computeLightColor } from './engine/light.js'
 import { initLightControls } from './engine/light-controls.js'
 import { buildScene } from './game/scene.js'
-import { createPlayerState, updatePlayer } from './game/player.js'
+import {
+  createPlayerState,
+  updatePlayer,
+  resetPlayer,
+  fireQueuedHop,
+  startDeath,
+  isDeathFinished,
+  getDeathTransform,
+  DeathType,
+} from './game/player.js'
 import { initPlayerControls } from './game/player-controls.js'
+import { createTrafficState, updateTraffic } from './game/traffic.js'
+import { checkCarCollision, checkWaterHazard } from './game/collision.js'
 
 // Vite's `?raw` suffix imports the file as a plain string
 import vertexShaderSourceCode from './shaders/model.vert.glsl?raw'
@@ -35,11 +46,19 @@ if (!gl) {
   throw new Error('WebGL2 is not supported.')
 }
 
-// Pauses this module until the model is loaded
-const model = await loadModel('./models/frog.glb', { materialGamma: 1.6 })
+const model = await loadModel('./models/frog.glb', { materialGamma: 1.6, targetSize: 1.3 })
+
+const carModel = await loadModel('./models/car.glb', {
+  materialGamma: 1.6,
+  targetSize: 2.4,
+  fallbackColor: [0.75, 0.15, 0.12],
+})
 
 // Static level geometry (lanes, props, markings)
 const scene = buildScene()
+
+// One fixed direction/speed per road lane, plus a row of cars in each
+const trafficState = createTrafficState(scene.roadLanes, scene.bounds)
 
 const modelShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
 
@@ -62,21 +81,21 @@ const attribLocations = {
 
 // One VAO per mesh part, each with its own color, sharing one shader program
 const frogRenderableParts = createRenderableParts(gl, model.parts, attribLocations)
-
-// Same idea, but for the static ground/props built in game/scene.js
 const sceneRenderableParts = createRenderableParts(gl, scene.parts, attribLocations)
+const carRenderableParts = createRenderableParts(gl, carModel.parts, attribLocations)
 
 gl.clearColor(0.1, 0.1, 0.1, 1.0)
 
 // Without depth testing, triangles draw in submission order instead of
-// nearest distance to camera order, so back faces would bleed through front faces
+// nearest-to-camera order, so back faces would bleed through front faces
 gl.enable(gl.DEPTH_TEST)
 
-// Placed at the scene's start position; recomputed every frame to track player movement
+// Recomputed every frame to track player movement
 const modelMatrix = mat4.create()
+const normalMatrix = mat3.create()
 
-// The scene is static and its vertex data already lives in world space
-// (baked in by game/scene.js), so it's always drawn with these identities
+// The scene is static and already baked into world space, so it's
+// always drawn with these identities
 const sceneModelMatrix = mat4.create()
 const sceneNormalMatrix = mat3.create()
 
@@ -135,6 +154,31 @@ function drawParts(parts, modelMatrixUniform, normalMatrixUniform) {
   }
 }
 
+// Reused every frame instead of allocated per-car
+const carModelMatrix = mat4.create()
+const carNormalMatrix = mat3.create()
+
+// Cars are the one car model, translated along their lane's z and along
+// x by however far updateTraffic has moved them, then rotated to face
+// the lane's direction of travel
+function drawTraffic(trafficState) {
+  for (const lane of trafficState) {
+    // Assumes the car model's default forward is +Z
+    const rotationY = lane.direction > 0 ? -Math.PI / 2 : Math.PI / 2
+
+    for (const car of lane.cars) {
+      mat4.identity(carModelMatrix)
+      mat4.translate(carModelMatrix, carModelMatrix, [car.x, 0, lane.centerZ])
+      mat4.rotateY(carModelMatrix, carModelMatrix, rotationY)
+      mat4.scale(carModelMatrix, carModelMatrix, [carModel.scale, carModel.scale, carModel.scale])
+
+      mat3.normalFromMat4(carNormalMatrix, carModelMatrix)
+
+      drawParts(carRenderableParts, carModelMatrix, carNormalMatrix)
+    }
+  }
+}
+
 function render(timeMs) {
   // First frame has no previous timestamp to diff against
   const deltaMs = lastFrameTimeMs === null ? 0 : timeMs - lastFrameTimeMs
@@ -143,26 +187,53 @@ function render(timeMs) {
   if (!isPaused) {
     animationTimeMs += deltaMs
     updatePlayer(playerState, animationTimeMs)
+    updateTraffic(trafficState, deltaMs)
+
+    if (!playerState.death) {
+      if (checkCarCollision(playerState, trafficState, scene)) {
+        const type = playerState.hop ? DeathType.SQUASHED_AIR : DeathType.SQUASHED_GROUND
+        startDeath(playerState, type, animationTimeMs)
+      } else if (!playerState.hop && checkWaterHazard(playerState, scene)) {
+        startDeath(playerState, DeathType.DROWNED, animationTimeMs)
+      }
+    }
+
+    if (isDeathFinished(playerState, animationTimeMs)) {
+      resetPlayer(playerState, scene.playerStart)
+    }
+
+    if (!playerState.death) {
+      fireQueuedHop(playerState, animationTimeMs)
+    }
   }
 
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-  // Scale to the model's normalized size, lift it by the current hop
-  // height, then move it to its spot in the scene
+  const deathTransform = getDeathTransform(playerState, animationTimeMs)
+
   mat4.identity(modelMatrix)
-  mat4.translate(modelMatrix, modelMatrix, [playerState.x, playerState.hopHeight, playerState.z])
+  mat4.translate(modelMatrix, modelMatrix, [
+    playerState.x,
+    playerState.hopHeight + (deathTransform ? deathTransform.offsetY : 0),
+    playerState.z,
+  ])
   mat4.rotateY(modelMatrix, modelMatrix, playerState.facing)
-  mat4.scale(modelMatrix, modelMatrix, [model.scale, model.scale, model.scale])
+  if (deathTransform && deathTransform.rotationX) {
+    mat4.rotateX(modelMatrix, modelMatrix, deathTransform.rotationX)
+  }
+  if (deathTransform && deathTransform.rotationZ) {
+    mat4.rotateZ(modelMatrix, modelMatrix, deathTransform.rotationZ)
+  }
+  mat4.scale(modelMatrix, modelMatrix, [
+    model.scale * (deathTransform ? deathTransform.scaleX : 1),
+    model.scale * (deathTransform ? deathTransform.scaleY : 1),
+    model.scale * (deathTransform ? deathTransform.scaleZ : 1),
+  ])
 
   // Follows the player, so it's recomputed every frame
   const cameraTarget = [playerState.x, 0, playerState.z]
-
-  // Recomputed every frame since the mode can change via keypress
   const viewMatrix = computeViewMatrix(currentCameraMode, cameraTarget)
 
-  // Inverse transpose of modelMatrix's upper 3x3, so normals transform
-  // correctly even if the model is ever scaled non uniformly
-  const normalMatrix = mat3.create()
   mat3.normalFromMat4(normalMatrix, modelMatrix)
 
   const cameraPosition = computeCameraPosition(cameraTarget)
@@ -174,8 +245,9 @@ function render(timeMs) {
   gl.uniform3fv(uLightColorLocation, computeLightColor())
   gl.uniform3fv(uViewPositionLocation, cameraPosition)
 
-  // Ground/props first, then the frog on top of it
+  // Ground/props first, then cars on the road lanes, then the frog on top
   drawParts(sceneRenderableParts, sceneModelMatrix, sceneNormalMatrix)
+  drawTraffic(trafficState)
   drawParts(frogRenderableParts, modelMatrix, normalMatrix)
 
   gl.bindVertexArray(null)

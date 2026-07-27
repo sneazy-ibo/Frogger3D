@@ -49,3 +49,91 @@ canvas {
 
   font: inherit;
 }
+
+#light-panel {
+  position: fixed;
+  inset-block-start: 1rem;
+  inset-inline-end: 1rem;
+  inline-size: 12rem;
+
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+
+  padding-block-start: 0.6rem;
+  border-block-start: 1px solid var(--surface);
+
+  font: 0.75rem/1.4 var(--font-ui);
+}
+
+#light-panel h2 {
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.control {
+  display: grid;
+  grid-template-columns: 3.75rem 1fr 2.25rem;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control label {
+  color: var(--text-muted);
+}
+
+.control output {
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+.control input[type='range'] {
+  appearance: none;
+  inline-size: 100%;
+  block-size: 1px;
+  background: var(--surface);
+}
+
+.control input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  inline-size: 0.65rem;
+  block-size: 0.65rem;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  cursor: pointer;
+}
+
+.control input[type='range']::-moz-range-thumb {
+  inline-size: 0.65rem;
+  block-size: 0.65rem;
+  border: none;
+  border-radius: 50%;
+  background: var(--text-subtle);
+  cursor: pointer;
+}
+
+.control input[type='color'] {
+  appearance: none;
+  grid-column: 2 / span 2;
+  justify-self: start;
+
+  inline-size: 1.1rem;
+  block-size: 1.1rem;
+  border: 1px solid var(--surface);
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+}
+
+.control input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.control input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}

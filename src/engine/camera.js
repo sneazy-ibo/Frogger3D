@@ -45,12 +45,18 @@ function sphericalToOffset(yaw, pitch, distance) {
   return [x, y, z]
 }
 
-export function computeViewMatrix(mode, targetPosition) {
-  const base = BASE_PRESETS[mode]
+export function computeCameraPosition(targetPosition) {
   const eyeOffset = sphericalToOffset(cameraState.yaw, cameraState.pitch, cameraState.distance)
 
   const eyePosition = vec3.create()
   vec3.add(eyePosition, targetPosition, eyeOffset)
+
+  return eyePosition
+}
+
+export function computeViewMatrix(mode, targetPosition) {
+  const base = BASE_PRESETS[mode]
+  const eyePosition = computeCameraPosition(targetPosition)
 
   const viewMatrix = mat4.create()
   mat4.lookAt(viewMatrix, eyePosition, targetPosition, base.up)

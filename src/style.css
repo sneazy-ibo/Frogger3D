@@ -30,6 +30,68 @@ canvas {
   display: block;
 }
 
+#brand,
+#game-link {
+  position: fixed;
+  top: 1rem;
+  z-index: 100;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 2.5rem;
+
+  color: var(--text-subtle);
+  text-decoration: none;
+  user-select: none;
+
+  background: var(--surface);
+  border: 1px solid var(--surface);
+  border-radius: 999px;
+  backdrop-filter: blur(12px);
+
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease;
+}
+
+#brand {
+  left: 1rem;
+  width: 2.5rem;
+}
+
+#game-link {
+  left: 4.25rem;
+  padding: 0 0.9rem;
+
+  font: 600 0.9rem/1 var(--font-ui);
+  letter-spacing: 0.02em;
+}
+
+#brand:hover,
+#game-link:hover {
+  color: white;
+  background: rgb(255 255 255 / 0.12);
+  transform: translateY(-2px);
+}
+
+#brand:active,
+#game-link:active {
+  transform: translateY(0);
+}
+
+.github-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+
+  background: currentColor;
+
+  -webkit-mask: url('/github.svg') center / contain no-repeat;
+  mask: url('/github.svg') center / contain no-repeat;
+}
+
 #hint {
   position: fixed;
   inset-block-end: 1rem;
@@ -37,6 +99,7 @@ canvas {
 
   color: var(--text-muted);
   font: 0.75rem/1.4 var(--font-ui);
+  user-select: none;
 }
 
 #hint kbd {
@@ -100,32 +163,41 @@ canvas {
 
 .control input[type='range']::-webkit-slider-thumb {
   appearance: none;
+
   inline-size: 0.65rem;
   block-size: 0.65rem;
+
   border-radius: 50%;
   background: var(--text-subtle);
+
   cursor: pointer;
 }
 
 .control input[type='range']::-moz-range-thumb {
   inline-size: 0.65rem;
   block-size: 0.65rem;
+
   border: none;
   border-radius: 50%;
   background: var(--text-subtle);
+
   cursor: pointer;
 }
 
 .control input[type='color'] {
   appearance: none;
+
   grid-column: 2 / span 2;
   justify-self: start;
 
   inline-size: 1.1rem;
   block-size: 1.1rem;
+
+  padding: 0;
+
   border: 1px solid var(--surface);
   border-radius: 50%;
-  padding: 0;
+
   cursor: pointer;
 }
 

@@ -1,8 +1,8 @@
 import { mat4, vec3 } from 'gl-matrix'
 
 export const CameraMode = {
-  ANGLED_TOP_DOWN: 'angled-top-down',
-  CHASE: 'chase',
+  THIRD_PERSON: 'third-person',
+  TOP_DOWN: 'top-down',
 }
 
 function degreesToRadians(degrees) {
@@ -10,31 +10,36 @@ function degreesToRadians(degrees) {
 }
 
 const BASE_PRESETS = {
-  [CameraMode.ANGLED_TOP_DOWN]: {
-    pitch: degreesToRadians(60),
-    distance: 9,
+  [CameraMode.THIRD_PERSON]: {
+    yaw: Math.PI,
+    pitch: degreesToRadians(30),
+    distance: 8,
     up: [0, 1, 0],
   },
-  [CameraMode.CHASE]: {
-    pitch: degreesToRadians(20),
-    distance: 5,
+  [CameraMode.TOP_DOWN]: {
+    yaw: Math.PI,
+    pitch: degreesToRadians(89),
+    distance: 12,
     up: [0, 1, 0],
   },
 }
 
 export const MIN_PITCH = degreesToRadians(5)
-export const MAX_PITCH = degreesToRadians(85)
+export const MAX_PITCH = degreesToRadians(89)
 export const MIN_DISTANCE = 2
 export const MAX_DISTANCE = 20
 
 export const cameraState = {
-  yaw: 0,
-  pitch: BASE_PRESETS[CameraMode.ANGLED_TOP_DOWN].pitch,
-  distance: BASE_PRESETS[CameraMode.ANGLED_TOP_DOWN].distance,
+  yaw: BASE_PRESETS[CameraMode.THIRD_PERSON].yaw,
+  pitch: BASE_PRESETS[CameraMode.THIRD_PERSON].pitch,
+  distance: BASE_PRESETS[CameraMode.THIRD_PERSON].distance,
 }
 
-export function resetCameraTilt(mode) {
+// Restores yaw/pitch/distance to the mode's preset
+export function resetCameraToPreset(mode) {
+  cameraState.yaw = BASE_PRESETS[mode].yaw
   cameraState.pitch = BASE_PRESETS[mode].pitch
+  cameraState.distance = BASE_PRESETS[mode].distance
 }
 
 // Converts yaw/pitch/distance into an xyz offset from the target

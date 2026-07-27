@@ -34,7 +34,7 @@ if (!gl) {
 }
 
 // Pauses this module until the model is loaded
-const model = await loadModel('/models/frog.glb', { materialGamma: 1.6 })
+const model = await loadModel('./models/frog.glb', { materialGamma: 1.6 })
 
 // Static level geometry (lanes, props, markings)
 const scene = buildScene()

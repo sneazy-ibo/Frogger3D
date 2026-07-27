@@ -86,11 +86,12 @@ export function buildScene(seed = 1) {
 
   let cursorZ = startZ
   let grassLaneIndex = 0
-  let waterLaneIndex = 0
+  let waterColorIndex = 0
 
   let previousLaneType = null
 
   const roadLanes = []
+  const waterLanes = []
 
   // Every lane in play order, each carrying its own z-range
   const lanes = []
@@ -105,7 +106,7 @@ export function buildScene(seed = 1) {
           ? COLORS.grassA
           : COLORS.grassB
         : lane.type === LaneType.WATER
-          ? waterLaneIndex++ % 2 === 0
+          ? waterColorIndex++ % 2 === 0
             ? COLORS.waterA
             : COLORS.waterB
           : lane.type === LaneType.MEDIAN
@@ -131,11 +132,17 @@ export function buildScene(seed = 1) {
       roadLanes.push({ centerZ, depth: lane.depth })
     }
 
+    const waterLaneIndex = lane.type === LaneType.WATER ? waterLanes.length : null
+    if (lane.type === LaneType.WATER) {
+      waterLanes.push({ centerZ, depth: lane.depth })
+    }
+
     lanes.push({
       type: lane.type,
       startZ: cursorZ,
       endZ: cursorZ + lane.depth,
       roadLaneIndex,
+      waterLaneIndex,
     })
 
     // Dividers belong at boundaries between road lanes, not lane centers
@@ -155,6 +162,7 @@ export function buildScene(seed = 1) {
     parts,
     playerStart,
     roadLanes,
+    waterLanes,
     lanes,
     bounds: { width: SCENE_WIDTH, startZ, endZ: startZ + totalDepth },
   }

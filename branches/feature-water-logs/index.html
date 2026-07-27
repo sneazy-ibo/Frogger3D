@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Frogger3D</title>
+    <script type="module" crossorigin src="./assets/index-DEajicOH.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-B7OyHkde.css">
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+
+    <p id="hint">
+      Drag to rotate &middot; Scroll to zoom &middot; Press <kbd>C</kbd> to switch view &middot;
+      Press <kbd>P</kbd> to pause
+    </p>
+
+    <div id="light-panel">
+      <h2>Light</h2>
+
+      <div class="control">
+        <label for="light-x">X</label>
+        <input id="light-x" type="range" min="-150" max="150" step="1" value="60" />
+        <output id="light-x-value" for="light-x">60.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-y">Y</label>
+        <input id="light-y" type="range" min="0" max="200" step="1" value="90" />
+        <output id="light-y-value" for="light-y">90.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-z">Z</label>
+        <input id="light-z" type="range" min="-150" max="150" step="1" value="60" />
+        <output id="light-z-value" for="light-z">60.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-intensity">Intensity</label>
+        <input id="light-intensity" type="range" min="0" max="3" step="0.1" value="1" />
+        <output id="light-intensity-value" for="light-intensity">1.0</output>
+      </div>
+
+      <div class="control">
+        <label for="light-color">Color</label>
+        <input id="light-color" type="color" value="#ffffff" />
+      </div>
+    </div>
+
+  </body>
+</html>

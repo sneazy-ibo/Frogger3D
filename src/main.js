@@ -28,7 +28,7 @@ if (!gl) {
 }
 
 // Pauses this module until the model is loaded
-const model = await loadModel('/models/frog.glb')
+const model = await loadModel('./models/frog.glb')
 
 const modelShaderProgram = createProgram(gl, vertexShaderSourceCode, fragmentShaderSourceCode)
 
